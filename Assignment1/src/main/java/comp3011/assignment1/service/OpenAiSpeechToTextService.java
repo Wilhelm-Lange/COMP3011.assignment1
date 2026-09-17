@@ -4,6 +4,7 @@ import comp3011.assignment1.dto.OpenAiTranscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatusCode;
@@ -13,6 +14,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
+// the real one. off when the stub profile is on, so only one of the two beans exists
+@Profile("!stub")
 @Service
 public class OpenAiSpeechToTextService implements SpeechToTextService {
 
