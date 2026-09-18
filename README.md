@@ -86,15 +86,30 @@ runs on TITAN where the variable is set - no code changes between the two.
 
 ## Testing
 
-Checked by hand against a running server:
+`./mvnw test` runs 8 tests.
 
-- each endpoint returns the shape and status the YAML specifies
-- timestamps come out as RFC 3339 strings, not epoch numbers
-- error paths: 400 on an empty upload, 400 with no multipart body, 413 on a 30MB
-  upload, 405 on the wrong method, 404 on an unknown path, 502 when OpenAI can't
-  be reached
-- three simultaneous shutdown requests give exactly one 202 and two 409s
-- **250 concurrent uploads against the stub: all 250 returned 200, no failures,
-  4.9 seconds total.** The token counters finished on exactly 2500 / 1250, which
-  is 250 x (10 in, 5 out) with no lost updates, so the synchronized counters hold
-  up under that load.
+**ApiEndpointTest** - every endpoint against the shapes and status codes in the YAML,
+using the stub profile so nothing calls OpenAI. Covers uptime, stats, a successful
+upload and a 400 on an empty one.
+
+**TokenStatsServiceTest** - the race condition tests. 250 threads release together and
+each does 100 updates, then the total is checked exactly. `inputTokens += n` is a read,
+an add and a write, so without synchronizing it two threads can read the same value and
+one update is lost. A second test has one thread recording while another reads, checking
+`inputTokens == outputTokens * 2` holds every time, which catches a reader seeing one
+counter updated and the other not.
+
+These fail if `synchronized` is removed from `TokenStatsService`, which was checked:
+the totals came back 49844 instead of 50000 (156 lost updates) and the paired read
+returned 36768 against an expected 36776. A race test that passes either way proves
+nothing, so it was worth confirming.
+
+**ConcurrentRequestTest** - the non-functional requirement of more than 200 concurrent
+blocking requests. Fires 250 real HTTP uploads at once through the controller and checks
+all 250 return 200, that it finishes quickly rather than queueing, and that the counters
+land on exactly 2500 / 1250. Typically completes in about 0.5 seconds. Proves no
+deadlock, no thread starvation, no crash, and no lost updates under load.
+
+Also checked by hand against a running server: the browser recording flow end to end,
+413 on a 30MB upload, 405 on the wrong method, 502 when OpenAI can't be reached, and
+three simultaneous shutdown requests giving exactly one 202 and two 409s.
